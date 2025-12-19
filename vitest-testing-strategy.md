@@ -149,7 +149,7 @@ describe('useUpdateProfile', () => {
 1. **Domain層のテスト** - ビジネスルールの保証
 2. **Use Cases/application層のテスト** - ビジネスフローの保証
 3. **Use Cases/hooks層のテスト** - 統合動作の保証（必要に応じて）
-4. **Infrastructure層のテスト** - E2Eテストで代替可能
+4. **Infrastructure層のテスト** - E2Eテストで代替可能（テスト不要）
 
 ## テスト実行コマンド
 
@@ -168,6 +168,7 @@ describe('useUpdateProfile', () => {
 
 - **過度なテストは避ける** - ROIを考慮してテストを書く
 - **Storybookとの役割分担** - UIの見た目はStorybookに任せる
+- **E2Eテストは実装不要** - Storybook + PlaywrightによるE2Eテストは構築・維持コストが高いため実装しない
 - **モックは最小限に** - 必要な部分のみモック化
 - **テストの保守性** - 実装の詳細に依存しないテストを心がける
 - **YAGNI原則の適用** - 現在使用している機能のみテスト

@@ -260,7 +260,7 @@ export const useCreateUser = () => {
 
   return useMutation({
     mutationFn: (input: CreateUserInput) => createUserUseCase.execute(input),
-    onSuccess: user => {
+    onSuccess: (user) => {
       queryClient.setQueryData(['user', user.id], user)
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
@@ -424,27 +424,26 @@ shared/ui/
 - SEO・初回表示が重要な一覧などは Server Component に適性あり。
 - プロジェクトの `CLAUDE.md` 指定があればそれを最優先。
 
-### ● React 19 対応
+### ● React バージョン対応
 
-- **forwardRef は不要**：React 19では`ref`がpropsとして自動的に転送される。
-- コンポーネント定義では通常の`function`構文を使用。
-- `React.forwardRef`と`displayName`は削除して良い。
+- **最新のReact公式リファレンスに従う**：Reactのバージョンアップに伴う変更は、常に[React公式ドキュメント](https://react.dev/)の最新版を参照する。
+- 新しいAPIや非推奨となったAPIについては、公式の移行ガイドに準拠する。
+- プロジェクトで使用しているReactバージョンに応じて、適切なパターンを選択する。
 
-例：
+例（バージョンによって異なる実装）：
 
 ```tsx
-// React 18以前（forwardRef使用）
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, ...props }, ref) => (
-    <button ref={ref} className={className} {...props} />
-  )
-)
+// 公式ドキュメントで推奨されている最新のパターンを使用
+// https://react.dev/reference/react を参照
 
-// React 19以降（forwardRef不要）
+// 例：refの扱い方は公式ドキュメントの推奨に従う
 function Button({ className, ...props }: ButtonProps) {
+  // 実装は使用中のReactバージョンと公式推奨に準拠
   return <button className={className} {...props} />
 }
 ```
+
+**重要**：特定のReactバージョンの機能をハードコードせず、プロジェクトの`package.json`のReactバージョンと公式ドキュメントを確認して実装する。
 
 ---
 
@@ -457,7 +456,11 @@ function Button({ className, ...props }: ButtonProps) {
 
 ### ● コードスタイル・フォーマット
 
-- プロジェクトに ESLint や Prettier が導入されている場合は、それらの設定に準拠してコーディングする。
+- **ESLintとPrettierの導入**：新しいプロジェクトでは以下を必ず設定する
+  - ESLint：コード品質とルールの統一
+  - Prettier：コードフォーマットの自動化
+  - これらの設定は Next.js 初期化時から標準で含まれることが多いが、未導入の場合は積極的に導入する
+- ESLint や Prettier が導入されている場合は、それらの設定に準拠してコーディングする。
 - `package.json` の scripts に `lint`, `format` 等が定義されていればその指定に従う。
 - 自動フォーマット機能がある場合は積極的に活用し、チーム内の一貫性を保つ。
 
