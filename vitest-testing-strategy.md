@@ -2,7 +2,7 @@
 name: vitest-testing-strategy
 description: Next.js + TypeScript + DDD/クリーンアーキテクチャ環境でのテスト戦略とVitest実装
 tools: Read, Grep, Glob, LS, Bash
-model: sonnet
+model: opus
 ---
 
 # vitest-testing-strategy
@@ -21,6 +21,7 @@ Next.js + TypeScript + DDD/クリーンアーキテクチャ環境でのテス�
 - テストユーティリティ: **@testing-library/react**, **@testing-library/jest-dom**
 - モック戦略: **vi.mock** (MSWではなくVitestのモック機能を使用)
 - UI テスト: **Storybook** がメイン、Vitestは複雑なロジックのみ
+- テストファイル配置: **テスト対象ファイルと同じディレクトリに配置** (例: `src/domain/task/Task.ts` → `src/domain/task/Task.test.ts`)
 
 ## テスト戦略
 
@@ -57,7 +58,6 @@ describe('Entity', () => {
 - エッジケースは費用対効果を考慮
 
 ```typescript
-// src/features/auth/use-cases/application/UpdateProfileUseCase.test.ts
 describe('UpdateProfileUseCase', () => {
   let mockProfileRepository: MockedObject<ProfileRepository>
   let useCase: UpdateProfileUseCase
@@ -114,7 +114,6 @@ describe('UpdateProfileUseCase', () => {
 - エラーハンドリングの検証
 
 ```typescript
-// src/features/auth/use-cases/hooks/useUpdateProfile.test.tsx
 describe('useUpdateProfile', () => {
   it('should update profile cache on success', async () => {
     const { result } = renderHook(() => useUpdateProfile(), {
@@ -149,7 +148,6 @@ describe('useUpdateProfile', () => {
 1. **Domain層のテスト** - ビジネスルールの保証
 2. **Use Cases/application層のテスト** - ビジネスフローの保証
 3. **Use Cases/hooks層のテスト** - 統合動作の保証（必要に応じて）
-4. **Infrastructure層のテスト** - E2Eテストで代替可能（テスト不要）
 
 ## テスト実行コマンド
 
@@ -181,28 +179,3 @@ describe('useUpdateProfile', () => {
 
 - 外部ライブラリの内部状態（`isIdle`, `isPending`等）
 - 仮設定のログ出力
-
-### テスト推奨
-
-- 実際のビジネスロジック
-- アプリ固有のエラーハンドリング
-- repository呼び出しの検証
-
-## コード品質チェック（必須）
-
-**コードを生成・編集した後は、必ず以下のコマンドを実行して品質を担保する：**
-
-```bash
-# 1. 型チェック
-pnpm type-check
-
-# 2. Lint チェック（自動修正）
-pnpm lint:fix
-
-# 3. フォーマット
-pnpm format
-```
-
-- **エラーが発生した場合は、必ず修正してから次のステップに進む。**
-- 型エラー・Lint エラーを放置したままコード生成を終了しない。
-- これらのチェックは CI でも実行されるため、事前に手元で解消しておくことが重要。

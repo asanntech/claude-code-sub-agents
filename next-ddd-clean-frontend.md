@@ -2,7 +2,7 @@
 name: next-ddd-clean-frontend
 description: 実務で回しやすい Next.js フロントエンドの設計・実装・リファクタリング
 tools: Read, Grep, Glob, LS, Bash
-model: sonnet
+model: opus
 ---
 
 # Next.js DDD Clean Architecture Frontend Agent
@@ -125,73 +125,24 @@ features/
 // features/user/domain/User.ts
 import { z } from 'zod'
 
-/**
- * Entity: ユーザー
- * - 識別子(id)を持つドメインオブジェクト
- * - Value Object、ファクトリー、検証を統合
- */
-
 // 基本スキーマ定義（Value Objectの機能も兼ねる）
 export const UserSchema = z.object({
   id: z.string().uuid(),
-  // Value Object相当: 名前の値制約
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(50, 'Name must be 50 characters or less')
-    .trim(),
-  // Value Object相当: メールアドレスの形式制約
-  email: z.string().email('Invalid email format').toLowerCase(),
-  // Value Object相当: アバタータイプの列挙制約
+  name: z.string().min(1).max(50).trim(),
+  email: z.string().email().toLowerCase(),
   avatarType: z.enum(['blue', 'red', 'green']).default('blue'),
   createdAt: z.date(),
 })
 
-// TypeScriptの型をZodスキーマから生成
 export type User = z.infer<typeof UserSchema>
+export type CreateUserInput = z.infer<typeof UserSchema.omit({ id: true, createdAt: true })>
 
-// 入力データ用のスキーマ
-export const CreateUserSchema = UserSchema.omit({
-  id: true,
-  createdAt: true,
+// ファクトリー関数
+export const createUser = (input: CreateUserInput): User => ({
+  id: crypto.randomUUID(),
+  ...CreateUserSchema.parse(input),
+  createdAt: new Date(),
 })
-
-export type CreateUserInput = z.infer<typeof CreateUserSchema>
-
-/**
- * ファクトリー関数
- */
-export const createUser = (input: CreateUserInput): User => {
-  // 1. 入力データの検証とサニタイズ
-  const validatedInput = CreateUserSchema.parse(input)
-
-  // 2. エンティティ作成
-  return {
-    id: crypto.randomUUID(),
-    ...validatedInput,
-    createdAt: new Date(),
-  }
-}
-
-/**
- * ビジネスルール検証
- */
-export const validateUserBusinessRules = (user: User): boolean => {
-  // 例：特定の組み合わせのバリデーション
-  if (user.name.toLowerCase().includes('admin') && user.avatarType !== 'blue') {
-    throw new Error('Admin users must use blue avatar')
-  }
-
-  return true
-}
-
-// カスタム検証スキーマ
-export const UserWithBusinessRulesSchema = UserSchema.refine(
-  validateUserBusinessRules,
-  {
-    message: 'Business rule validation failed',
-  }
-)
 ```
 
 #### Repository Interface例
@@ -228,15 +179,11 @@ export interface UserRepository {
 #### use-cases例
 
 ```ts
-// features/user/use-cases/application/CreateUserUseCase.ts
-import { type User, createUser, type CreateUserInput } from '../../domain/User'
-import { type UserRepository } from '../../domain/UserRepository'
-
+// application/CreateUserUseCase.ts
 export class CreateUserUseCase {
   constructor(private readonly userRepository: UserRepository) {}
 
   async execute(input: CreateUserInput): Promise<User> {
-    // ビジネスロジック
     const user = createUser(input)
     const existing = await this.userRepository.findByEmail(user.email)
     if (existing) {
@@ -245,15 +192,8 @@ export class CreateUserUseCase {
     return await this.userRepository.create(user)
   }
 }
-```
 
-```ts
-// features/user/use-cases/hooks/useCreateUser.ts
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CreateUserUseCase } from '../application/CreateUserUseCase'
-import { userRepository } from '../../../infrastructure/repositories'
-import { type CreateUserInput } from '../../domain/User'
-
+// hooks/useCreateUser.ts
 export const useCreateUser = () => {
   const queryClient = useQueryClient()
   const createUserUseCase = new CreateUserUseCase(userRepository)
@@ -268,37 +208,6 @@ export const useCreateUser = () => {
 }
 ```
 
-```ts
-// features/user/use-cases/application/GetUserUseCase.ts
-import { type User } from '../../domain/User'
-import { type UserRepository } from '../../domain/UserRepository'
-
-export class GetUserUseCase {
-  constructor(private readonly userRepository: UserRepository) {}
-
-  async execute(id: string): Promise<User | null> {
-    return await this.userRepository.findById(id)
-  }
-}
-```
-
-```ts
-// features/user/use-cases/hooks/useUser.ts
-import { useQuery } from '@tanstack/react-query'
-import { GetUserUseCase } from '../application/GetUserUseCase'
-import { userRepository } from '../../../infrastructure/repositories'
-
-export const useUser = (id: string | null) => {
-  const getUserUseCase = new GetUserUseCase(userRepository)
-
-  return useQuery({
-    queryKey: ['user', id],
-    queryFn: () => getUserUseCase.execute(id!),
-    enabled: !!id,
-  })
-}
-```
-
 ### ● infrastructure
 
 - HTTP クライアント・Repository の具象実装。
@@ -308,61 +217,17 @@ export const useUser = (id: string | null) => {
 
 ```ts
 // infrastructure/api/UserApiClient.ts
-import { type User } from '../../features/user/domain/User'
-import { type UserRepository } from '../../features/user/domain/UserRepository'
-
-interface UserDto {
-  id: string
-  name: string
-  email: string
-  avatar_type: string
-  created_at: string
-  updated_at: string
-}
-
 export class UserApiClient implements UserRepository {
-  private baseUrl: string
-
-  constructor(baseUrl: string = '/api') {
-    this.baseUrl = baseUrl
-  }
+  constructor(private baseUrl: string = '/api') {}
 
   async findById(id: string): Promise<User | null> {
     const response = await fetch(`${this.baseUrl}/users/${id}`)
     if (!response.ok) return null
-
-    const dto: UserDto = await response.json()
-    return this.toDomain(dto)
+    return this.toDomain(await response.json())
   }
+  
+  // ... 他のメソッド
 
-  async findByEmail(email: string): Promise<User | null> {
-    const response = await fetch(`${this.baseUrl}/users?email=${email}`)
-    if (!response.ok) return null
-
-    const dto: UserDto = await response.json()
-    return this.toDomain(dto)
-  }
-
-  async create(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
-    const response = await fetch(`${this.baseUrl}/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: user.name,
-        email: user.email,
-        avatar_type: user.avatarType,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to create user: ${response.statusText}`)
-    }
-
-    const dto: UserDto = await response.json()
-    return this.toDomain(dto)
-  }
-
-  // DTO → Domain 変換
   private toDomain(dto: UserDto): User {
     return {
       id: dto.id,
@@ -373,41 +238,13 @@ export class UserApiClient implements UserRepository {
     }
   }
 }
-
-// シングルトンエクスポート
-export const userApiClient = new UserApiClient()
 ```
 
-### ● ui（feature 配下）
+### ● ui（feature 配下）・shared/ui
 
-- ページ・コンポーネント・プレゼンテーションロジック。
-- application の hook を使い、表示ロジックに集中する。
-- コンポーネント単位でディレクトリを分割：
-
-```
-features/room/ui/
-  room-card/
-    room-card.tsx
-    index.ts
-  room-form/
-    room-form.tsx
-    index.ts
-```
-
-### ● shared/ui
-
-- プロジェクト全体で共通利用するUIコンポーネント。
-- コンポーネント単位でディレクトリを分割：
-
-```
-shared/ui/
-  button/
-    button.tsx
-    index.ts
-  card/
-    card.tsx
-    index.ts
-```
+- コンポーネント単位でディレクトリを分割
+- feature/ui：機能固有のUIコンポーネント
+- shared/ui：プロジェクト共通のUIコンポーネント
 
 ---
 
@@ -472,22 +309,11 @@ function Button({ className, ...props }: ButtonProps) {
 
 ### ● コード品質チェック（必須）
 
-**コードを生成・編集した後は、必ず以下のコマンドを実行して品質を担保する：**
-
 ```bash
-# 1. 型チェック
-pnpm type-check
-
-# 2. Lint チェック（自動修正）
-pnpm lint:fix
-
-# 3. フォーマット
-pnpm format
+pnpm type-check  # 型チェック
+pnpm lint:fix    # Lintチェック（自動修正）
+pnpm format      # フォーマット
 ```
-
-- **エラーが発生した場合は、必ず修正してから次のステップに進む。**
-- 型エラー・Lint エラーを放置したままコード生成を終了しない。
-- これらのチェックは CI でも実行されるため、事前に手元で解消しておくことが重要。
 
 ---
 
